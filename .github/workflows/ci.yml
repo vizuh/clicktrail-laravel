@@ -1,0 +1,40 @@
+# ClickTrail canonical PHP CI template (ADR-0001, M3).
+# Copy VERBATIM into each repo as .github/workflows/ci.yml.
+# Drift between repos is intentional-diff only; update here first, then sync.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.1', '8.2', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: Lint all PHP files
+        run: find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+      - name: Install dependencies
+        run: |
+          if [ -f composer.json ]; then composer install --prefer-dist --no-interaction --no-progress || echo "no deps"; fi
+      - name: PHPUnit (if configured)
+        run: |
+          if [ -f phpunit.xml.dist ] || [ -f phpunit.xml ]; then vendor/bin/phpunit --testdox; else echo "no phpunit config"; fi

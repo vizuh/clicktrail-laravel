@@ -1,0 +1,43 @@
+{
+    "name": "clicktrail/laravel",
+    "description": "Laravel adapter for ClickTrail attribution: service provider + facade, capture middleware, queued delivery jobs, Blade components/directives, artisan diagnostics, first-party proxy stub, webhook signature verification, consent resolver interface.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.1",
+        "illuminate/support": "^10.0|^11.0",
+        "illuminate/http": "^10.0|^11.0",
+        "illuminate/config": "^10.0|^11.0",
+        "clicktrail/php-sdk": "dev-main"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../clicktrail-php",
+            "options": {"symlink": true}
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/vizuh/clicktrail-php.git"
+        }
+    ],
+    "autoload": {
+        "psr-4": {"ClickTrail\\Laravel\\": "src/"}
+    },
+    "extra": {
+        "laravel": {
+            "providers": ["ClickTrail\\Laravel\\ClickTrailServiceProvider"],
+            "aliases": {
+                "ClickTrail": "ClickTrail\\Laravel\\Facades\\ClickTrail"
+            }
+        }
+    },
+    "authors": [
+        {"name": "Vizuh OU", "email": "hugo@vizuh.com"}
+    ],
+    "keywords": ["laravel", "attribution", "utm", "gclid", "consent", "blade"],
+    "support": {
+        "issues": "https://github.com/vizuh/clicktrail-laravel/issues",
+        "source": "https://github.com/vizuh/clicktrail-laravel"
+    }
+}
