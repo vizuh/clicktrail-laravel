@@ -4,7 +4,7 @@
 
 **clicktrail/laravel**
 
-See which campaign, keyword, click ID and landing page created each form submission and conversion — in any Laravel 10/11 app.
+See which campaign, keyword, click ID and landing page created each form submission and conversion in any Laravel 10/11 app.
 
 </div>
 
@@ -46,7 +46,7 @@ php artisan vendor:publish --tag=clicktrail-config
 
 ## Quick start
 
-`clicktrail()` is the single obvious entry point (the `ClickTrail` facade also exists).
+`clicktrail()` is the main entry point (a `ClickTrail` facade also exists).
 
 ```php
 // 1. Register capture on the route groups whose traffic should build
@@ -58,12 +58,12 @@ Route::middleware(['web', 'clicktrail.capture'])->group(function () {
 // 2. A visitor arrives from Google Ads; the middleware merges the touch.
 //    After the request:
 session('clicktrail.attribution');
-// JSON with first->source === 'google', first->clickIds['gclid'] set —
-// persisted ONLY when consent permits analytics storage; unknown = denied.
+// JSON with first->source === 'google', first->clickIds['gclid'] set.
+// Persisted ONLY when consent permits analytics storage; unknown = denied.
 
 // 3. Inspect or merge from your own code via the helper:
 $state = clicktrail()->capture($request);   // StoredState for this request
-clicktrail()->pendingPayloads();            // [] — nothing queued yet
+clicktrail()->pendingPayloads();            // [] means nothing queued yet
 
 // 4. On conversion (form submit, order), queue delivery:
 \ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
@@ -71,7 +71,7 @@ clicktrail()->pendingPayloads();            // [] — nothing queued yet
 // 200ms/1s/5s; nothing is sent during the request itself.
 ```
 
-A direct visit afterwards changes nothing — first touch stays, stored last touch persists. That is the SDK's merge law, tested, not promised.
+A direct visit afterwards changes nothing: first touch stays, stored last touch persists. That is the SDK's merge law, tested, not promised.
 
 ## Blade output
 
@@ -97,7 +97,7 @@ Events are never sent during the request. Dispatch the delivery job from your ow
 
 ```php
 \ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
-// flush() throws RetryableException on 429/5xx/network — Laravel re-runs the
+// flush() throws RetryableException on 429/5xx/network. Laravel re-runs the
 // job via backoff([200ms, 1000ms, 5000ms]). A PermanentException fails the
 // job and routes payloads to the failed-events table.
 ```
@@ -113,7 +113,7 @@ foreach (\ClickTrail\Laravel\Models\ClickTrailFailedEvent::get() as $row) {
     clicktrail()->restorePayloads(json_decode($row->payload, true));
 }
 // payloads are back in the BatchClient queue; the next DeliverEventsJob run
-// sends them unchanged — same idempotency keys, no duplicates.
+// sends them unchanged, same idempotency keys, no duplicates.
 ```
 
 ## Consent
@@ -146,7 +146,7 @@ Verify ClickTrail webhook callbacks with HMAC-SHA256 constant-time comparison:
 | Package | What it does | Boundary |
 |---|---|---|
 | **combindma/laravel-trail** | Stores UTMs/referrers in cookies | ClickTrail proves which campaign created the lead or sale: deterministic first/last-touch merge laws validated by golden fixtures shared with our WordPress and GTM engines, consent-gated persistence, batched delivery with idempotency keys |
-| **DirectoryTree/Metrics** | Counts anonymous events | Complementary — ClickTrail connects campaigns to identities and revenue |
+| **DirectoryTree/Metrics** | Counts anonymous events | Complementary: ClickTrail connects campaigns to identities and revenue |
 
 See `../docs/COMPETITOR-NOTES.md` for the full analysis.
 
@@ -161,4 +161,4 @@ CI lints all files and runs both stages on PHP 8.1–8.3 (`.github/workflows/ci.
 
 ## License
 
-MIT — Copyright (c) 2026 Vizuh OÜ
+MIT. Copyright (c) 2026 Vizuh OÜ
