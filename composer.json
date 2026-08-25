@@ -14,7 +14,9 @@
         {
             "type": "path",
             "url": "../clicktrail-php",
-            "options": {"symlink": true}
+            "options": {
+                "symlink": true
+            }
         },
         {
             "type": "vcs",
@@ -22,20 +24,37 @@
         }
     ],
     "autoload": {
-        "psr-4": {"ClickTrail\\Laravel\\": "src/"}
+        "psr-4": {
+            "ClickTrail\\Laravel\\": "src/"
+        },
+        "files": [
+            "src/helpers.php"
+        ]
     },
     "extra": {
         "laravel": {
-            "providers": ["ClickTrail\\Laravel\\ClickTrailServiceProvider"],
+            "providers": [
+                "ClickTrail\\Laravel\\ClickTrailServiceProvider"
+            ],
             "aliases": {
                 "ClickTrail": "ClickTrail\\Laravel\\Facades\\ClickTrail"
             }
         }
     },
     "authors": [
-        {"name": "Vizuh OU", "email": "hugo@vizuh.com"}
+        {
+            "name": "Vizuh OU",
+            "email": "hugo@vizuh.com"
+        }
     ],
-    "keywords": ["laravel", "attribution", "utm", "gclid", "consent", "blade"],
+    "keywords": [
+        "laravel",
+        "attribution",
+        "utm",
+        "gclid",
+        "consent",
+        "blade"
+    ],
     "support": {
         "issues": "https://github.com/vizuh/clicktrail-laravel/issues",
         "source": "https://github.com/vizuh/clicktrail-laravel"
