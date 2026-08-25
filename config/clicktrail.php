@@ -10,6 +10,10 @@ return [
     |--------------------------------------------------------------------------
     */
 
+    // Master switch (Trail-pattern): disables capture AND rendering without
+    // ripping config out - convenient for local dev / kill-switch.
+    'enabled' => env('CLICKTRAIL_ENABLED', true),
+
     'site_id' => env('CLICKTRAIL_SITE_ID', ''),
 
     'api_key' => env('CLICKTRAIL_API_KEY'),
@@ -39,6 +43,23 @@ return [
 
     // Session key holding serialized first/last-touch state.
     'session_key' => 'clicktrail.attribution',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Capture storage (cookie block, Trail-pattern)
+    |--------------------------------------------------------------------------
+    */
+
+    'capture' => [
+        'cookie_prefix' => env('CLICKTRAIL_COOKIE_PREFIX', 'ct_'),
+        // Minutes. 180 days matches the ecosystem norm for attribution cookies.
+        'cookie_duration' => env('CLICKTRAIL_COOKIE_DURATION', 60 * 24 * 180),
+    ],
+
+    // Persist undeliverable event payloads to the clicktrail_failed_events
+    // table when a delivery job exhausts its retries (Metrics-pattern buffered
+    // commit; payloads replay via ClickTrailManager::restorePayloads()).
+    'persist_failed_events' => env('CLICKTRAIL_PERSIST_FAILED_EVENTS', true),
 
     // Request attribute carrying the merged StoredState after capture.
     'attribute_key' => 'clicktrail.attribution_state',

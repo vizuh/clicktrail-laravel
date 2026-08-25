@@ -29,6 +29,8 @@ use RuntimeException;
  */
 final class ClickTrailManager
 {
+    private ?BatchClient $client = null;
+
     public function __construct(private readonly Container $app)
     {
     }
@@ -70,12 +72,27 @@ final class ClickTrailManager
     }
 
     /**
-     * BatchClient built from config. Requires PSR-18 client + PSR-17
-     * request/stream factories bound in the container; Laravel ships none by
-     * default, so a missing binding is an explicit configuration error.
-     * // TODO verify: consider shipping a Guzzle-based default in require-dev docs.
+     * Cached BatchClient - queued events survive between calls within a
+     * process so track()-then-dispatch actually batches.
      */
     public function client(): BatchClient
+    {
+        return $this->client ??= $this->buildClient();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function pendingPayloads(): array
+    {
+        return $this->client()->pending();
+    }
+
+    /** @param array<int, array<string, mixed>> $payloads */
+    public function restorePayloads(array $payloads): void
+    {
+        $this->client()->restore($payloads);
+    }
+
+    private function buildClient(): BatchClient
     {
         foreach ([Psr18ClientInterface::class, RequestFactoryInterface::class, StreamFactoryInterface::class] as $abstract) {
             if (! $this->app->bound($abstract)) {

@@ -99,6 +99,18 @@ Verify ClickTrail webhook callbacks with HMAC-SHA256 constant-time comparison:
 \ClickTrail\Laravel\Support\WebhookSignature::verify($payload, $request->header('X-ClickTrail-Signature'), $secret);
 ```
 
+## How this differs from Trail / Metrics
+
+- **combindma/laravel-trail** stores UTMs/referrers in cookies. ClickTrail
+  proves which campaign created the lead or sale: deterministic first/last-touch
+  merge laws validated by golden fixtures shared with our WordPress and GTM
+  engines, consent-gated persistence, batched delivery with idempotency keys,
+  and offline-conversion feedback to advertising systems.
+- **DirectoryTree/Metrics** counts anonymous events. Complementary - ClickTrail
+  connects campaigns to identities and revenue, not page-view counters.
+
+See `../docs/COMPETITOR-NOTES.md` for the full analysis.
+
 ## License
 
 MIT — Copyright (c) 2026 Vizuh OÜ

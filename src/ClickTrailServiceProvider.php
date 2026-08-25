@@ -15,6 +15,7 @@ final class ClickTrailServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         $this->mergeConfigFrom(__DIR__ . '/../config/clicktrail.php', 'clicktrail');
 
         $this->app->singleton(ClickTrailManager::class, static fn (Application $app): ClickTrailManager => new ClickTrailManager($app));

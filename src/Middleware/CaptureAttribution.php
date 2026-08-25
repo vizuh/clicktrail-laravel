@@ -27,6 +27,10 @@ final class CaptureAttribution
 {
     public function handle(Request $request, Closure $next): Response
     {
+        if (! (bool) config('clicktrail.enabled', true)) {
+            return $next($request); // master switch (dev / kill-switch)
+        }
+
         /** @var ClickTrailManager $manager */
         $manager = app(ClickTrailManager::class);
 

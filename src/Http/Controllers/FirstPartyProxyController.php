@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ClickTrail\Laravel\Http\Controllers;
 
+use ClickTrail\Laravel\ClickTrailManager;
 use ClickTrail\Laravel\Jobs\DeliverEventsJob;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,8 +20,7 @@ final class FirstPartyProxyController
 {
     public function __invoke(Request $request): Response
     {
-        // Route registration already gates on the flag; belt-and-suspenders here.
-        abort_unless((bool) config('clicktrail.first_party_proxy', false), 404);
+        abort_unless((bool) config('clicktrail.first_party_proxy', false) && (bool) config('clicktrail.enabled', true), 404);
 
         $payload = $request->json()->all();
 
@@ -28,12 +28,21 @@ final class FirstPartyProxyController
             return new JsonResponse(['error' => 'invalid_payload', 'detail' => 'body must be a JSON object with an "events" array'], 422);
         }
 
-        // Forward delivery through the queue worker. Raw event arrays are
-        // re-validated/serialized by the SDK BatchClient on flush.
-        // TODO verify: BatchClient.track() currently accepts EventInterface objects;
-        // raw-payload ingestion needs a mapping step once the live events/batch
-        // endpoint contract is verified (NEXT-TASKS.md task 2 remainder).
-        DeliverEventsJob::dispatch();
+        /** @var ClickTrailManager $manager */
+        $manager = app(ClickTrailManager::class);
+
+        // Raw event arrays are re-validated by the SDK on flush.
+        // TODO verify: raw-payload -> envelope mapping once the live
+        // events/batch contract is verified (NEXT-TASKS.md task 2 remainder).
+        foreach ($payload['events'] as $event) {
+            if (! is_array($event)) {
+                continue;
+            }
+            $client = $manager->client();
+            $client->restore([$event]);
+        }
+
+        DeliverEventsJob::dispatch($manager->pendingPayloads());
 
         return new JsonResponse(['queued' => true], 202);
 
