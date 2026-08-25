@@ -46,7 +46,7 @@ jobs:
       - name: Validate Composer metadata
         run: composer validate --no-check-publish --strict
       - name: Install dependencies (strict)
-        run: composer install --prefer-dist --no-interaction --no-progress
+        run: composer install --no-plugins --prefer-dist --no-interaction --no-progress
       - name: Run standalone assertions
         env:
           CLICKTRAIL_APP_ROOT: ${{ github.workspace }}
