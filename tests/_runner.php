@@ -23,13 +23,16 @@ namespace {
         }
     }
 
-    spl_autoload_register(function ($class): void {
+    $appRoot = getenv('CLICKTRAIL_APP_ROOT') ?: '/app';
+    $sdkRoot = getenv('CLICKTRAIL_SDK_ROOT') ?: '/sdk';
+
+    spl_autoload_register(function ($class) use ($appRoot, $sdkRoot): void {
         $map = [
-            'ClickTrail\\Laravel\\' => '/app/src/',
-            'ClickTrail\\Core\\' => '/sdk/src/Core/',
-            'ClickTrail\\Consent\\' => '/sdk/src/Consent/',
-            'ClickTrail\\Conventions\\' => '/sdk/src/Conventions/',
-            'ClickTrail\\' => '/sdk/src/', // Client + anything else in the SDK
+            'ClickTrail\\Laravel\\' => $appRoot . '/src/',
+            'ClickTrail\\Core\\' => $sdkRoot . '/src/Core/',
+            'ClickTrail\\Consent\\' => $sdkRoot . '/src/Consent/',
+            'ClickTrail\\Conventions\\' => $sdkRoot . '/src/Conventions/',
+            'ClickTrail\\' => $sdkRoot . '/src/', // Client + anything else in the SDK
         ];
         foreach ($map as $prefix => $base) {
             if (str_starts_with($class, $prefix)) {
@@ -58,7 +61,7 @@ namespace {
 
     // ---- T1: config defaults -------------------------------------------------
     /** @var array<string, mixed> $cfg */
-    $cfg = require '/app/config/clicktrail.php';
+    $cfg = require $appRoot . '/config/clicktrail.php';
     $inc();
     check(is_array($cfg), 'T1 config returns array');
     check($cfg['consent_required'] === true, 'T1 consent_required defaults true');

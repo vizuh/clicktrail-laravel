@@ -1,6 +1,5 @@
-# ClickTrail canonical PHP CI template (ADR-0001, M3).
-# Copy VERBATIM into each repo as .github/workflows/ci.yml.
-# Drift between repos is intentional-diff only; update here first, then sync.
+# CI gate: syntax, dependency resolution, and package-specific assertions.
+# Platform integration tests require the host CMS and are tracked separately.
 
 name: CI
 
@@ -24,17 +23,32 @@ jobs:
       - name: Lint all PHP files
         run: find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
 
-  test:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: vizuh/clicktrail-php
+          path: sdk
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
           coverage: none
-      - name: Install dependencies
+      - name: Point Composer at the SDK checkout
         run: |
-          if [ -f composer.json ]; then composer install --prefer-dist --no-interaction --no-progress || echo "no deps"; fi
-      - name: PHPUnit (if configured)
-        run: |
-          if [ -f phpunit.xml.dist ] || [ -f phpunit.xml ]; then vendor/bin/phpunit --testdox; else echo "no phpunit config"; fi
+          set -euo pipefail
+          if grep -q '"../clicktrail-php"' composer.json; then
+            sed -i 's#"../clicktrail-php"#"sdk"#g' composer.json
+          elif grep -q '"clicktrail/php-sdk"' composer.json; then
+            composer config repositories.clicktrail-sdk path sdk
+          fi
+      - name: Validate Composer metadata
+        run: composer validate --no-check-publish --strict
+      - name: Install dependencies (strict)
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Run standalone assertions
+        env:
+          CLICKTRAIL_APP_ROOT: ${{ github.workspace }}
+          CLICKTRAIL_SDK_ROOT: ${{ github.workspace }}/sdk
+        run: php tests/_runner.php
