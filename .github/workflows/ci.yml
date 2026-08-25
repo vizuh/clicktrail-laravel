@@ -45,7 +45,7 @@ jobs:
             composer config repositories.clicktrail-sdk path sdk
           fi
       - name: Validate Composer metadata
-        run: composer validate --no-check-publish --strict
+        run: composer --no-plugins validate --no-check-publish --strict
       - name: Install dependencies (strict)
         run: composer install --no-plugins --prefer-dist --no-interaction --no-progress
       - name: Run standalone assertions
