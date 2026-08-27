@@ -4,7 +4,8 @@
 
 **clicktrail/laravel**
 
-Veja qual campanha, palavra-chave, click ID e página de destino gerou cada envio de formulário e conversão — em qualquer app Laravel 10/11.
+Leve o contexto de aquisição observado em uma requisição Laravel até os pontos
+configurados de sessão, Blade e eventos em fila.
 
 </div>
 
@@ -30,7 +31,11 @@ Veja qual campanha, palavra-chave, click ID e página de destino gerou cada envi
 
 ## Por quê
 
-A maioria dos pacotes de tracking guarda o que a página mostrou. O ClickTrail prova qual campanha criou o lead ou a venda. Este pacote é um adaptador fino sobre o [clicktrail/php-sdk](https://github.com/vizuh/clicktrail-php): o SDK cuida de parse/classify/merge/serialize; o Laravel cuida do middleware de captura, persistência em sessão gated por consentimento, entrega em fila, saída Blade e diagnóstico via artisan.
+Este pacote não determina qual campanha causou um lead ou uma venda. Ele é um
+adaptador fino sobre o [clicktrail/php-sdk](https://github.com/vizuh/clicktrail-php):
+o SDK cuida de parse, classify, merge e serialize; o Laravel cuida do middleware
+de captura, persistência em sessão condicionada a consentimento, entrega em
+fila, saída Blade e diagnósticos Artisan.
 
 ## Instalação
 
@@ -58,13 +63,13 @@ Route::middleware(['web', 'clicktrail.capture'])->group(function () {
 // 2. Um visitante chega do Google Ads; o middleware faz o merge do touch.
 //    Depois da request:
 session('clicktrail.attribution');
-// JSON com first->source === 'google', first->clickIds['gclid'] preenchido —
+// JSON com first->source === 'google', first->clickIds['gclid'] preenchido;
 // persistido SOMENTE quando o consentimento permite analytics storage;
 // desconhecido = negado.
 
 // 3. Inspecione ou faça merge do seu próprio código pelo helper:
 $state = clicktrail()->capture($request);   // StoredState desta request
-clicktrail()->pendingPayloads();            // [] — nada na fila ainda
+clicktrail()->pendingPayloads();            // []; nada na fila ainda
 
 // 4. Na conversão (submit de formulário, pedido), despache a entrega:
 \ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
@@ -72,7 +77,7 @@ clicktrail()->pendingPayloads();            // [] — nada na fila ainda
 // 200ms/1s/5s; nada é enviado durante a própria request.
 ```
 
-Uma visita direta depois não muda nada — o first touch permanece, o last touch armazenado persiste. Essa é a merge law do SDK: testada, não prometida.
+Uma visita direta depois não muda nada; o first touch permanece, o last touch armazenado persiste. Essa é a merge law do SDK: testada, não prometida.
 
 ## Saída Blade
 
@@ -98,7 +103,7 @@ Os eventos nunca são enviados durante a request. Despache o job de entrega a pa
 
 ```php
 \ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
-// flush() lança RetryableException em 429/5xx/rede — o Laravel reexecuta o
+// flush() lança RetryableException em 429/5xx/rede; o Laravel reexecuta o
 // job via backoff([200ms, 1000ms, 5000ms]). Uma PermanentException falha o
 // job e manda os payloads para a tabela de eventos com falha.
 ```
@@ -114,7 +119,7 @@ foreach (\ClickTrail\Laravel\Models\ClickTrailFailedEvent::get() as $row) {
     clicktrail()->restorePayloads(json_decode($row->payload, true));
 }
 // os payloads voltam para a fila do BatchClient; o próximo DeliverEventsJob
-// os envia sem alteração — mesmas idempotency keys, sem duplicatas.
+// os envia sem alteração; mesmas idempotency keys, sem duplicatas.
 ```
 
 ## Consentimento
@@ -146,8 +151,8 @@ Verifique callbacks de webhook do ClickTrail com comparação HMAC-SHA256 em tem
 
 | Pacote | O que faz | Fronteira |
 |---|---|---|
-| **combindma/laravel-trail** | Guarda UTMs/referrers em cookies | O ClickTrail prova qual campanha criou o lead ou a venda: leis determinísticas de merge first/last-touch validadas por golden fixtures compartilhadas com nossos engines WordPress e GTM, persistência gated por consentimento, entrega em lote com idempotency keys |
-| **DirectoryTree/Metrics** | Conta eventos anônimos | Complementar — o ClickTrail conecta campanhas a identidades e receita |
+| **combindma/laravel-trail** | Guarda UTMs/referrers em cookies | O ClickTrail adiciona regras explícitas de primeiro/último toque, gate de consentimento resolvido pelo host e entrega em fila de eventos canônicos |
+| **DirectoryTree/Metrics** | Conta eventos anônimos | Trabalho separado: o ClickTrail leva contexto de aquisição; este pacote não oferece painel de analytics nem atribuição de receita |
 
 Veja `../docs/COMPETITOR-NOTES.md` para a análise completa.
 
@@ -162,4 +167,4 @@ O CI faz lint de todos os arquivos e roda as duas etapas no PHP 8.1–8.3 (`.git
 
 ## Licença
 
-MIT — Copyright (c) 2026 Vizuh OÜ
+MIT; Copyright (c) 2026 Vizuh OÜ

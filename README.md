@@ -4,7 +4,8 @@
 
 **clicktrail/laravel**
 
-See which campaign, keyword, click ID and landing page created each form submission and conversion in any Laravel 10/11 app.
+Carry observed acquisition context from a Laravel request to configured
+session, Blade, and queued-event boundaries.
 
 </div>
 
@@ -30,7 +31,11 @@ See which campaign, keyword, click ID and landing page created each form submiss
 
 ## Why
 
-Most tracking packages store what a page showed. ClickTrail proves which campaign created the lead or sale. This package is a thin adapter over [clicktrail/php-sdk](https://github.com/vizuh/clicktrail-php): the SDK owns parse/classify/merge/serialize; Laravel owns capture middleware, consent-gated session persistence, queued delivery, Blade output, and artisan diagnostics.
+This package does not determine which campaign caused a lead or sale. It is a
+thin adapter over [clicktrail/php-sdk](https://github.com/vizuh/clicktrail-php):
+the SDK owns parse, classify, merge, and serialize behavior; Laravel owns
+capture middleware, consent-gated session persistence, queued delivery, Blade
+output, and Artisan diagnostics.
 
 ## Installation
 
@@ -145,8 +150,8 @@ Verify ClickTrail webhook callbacks with HMAC-SHA256 constant-time comparison:
 
 | Package | What it does | Boundary |
 |---|---|---|
-| **combindma/laravel-trail** | Stores UTMs/referrers in cookies | ClickTrail proves which campaign created the lead or sale: deterministic first/last-touch merge laws validated by golden fixtures shared with our WordPress and GTM engines, consent-gated persistence, batched delivery with idempotency keys |
-| **DirectoryTree/Metrics** | Counts anonymous events | Complementary: ClickTrail connects campaigns to identities and revenue |
+| **combindma/laravel-trail** | Stores UTMs/referrers in cookies | ClickTrail adds explicit first/last-touch rules, host-resolved consent gating, and queued canonical-event delivery |
+| **DirectoryTree/Metrics** | Counts anonymous events | Separate job: ClickTrail carries acquisition context; this package does not provide an analytics dashboard or revenue attribution |
 
 See `../docs/COMPETITOR-NOTES.md` for the full analysis.
 
