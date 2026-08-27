@@ -4,7 +4,7 @@
 
 **clicktrail/laravel**
 
-在任意 Laravel 10/11 应用中，看清是哪个广告系列、关键词、点击 ID 和落地页带来了每一次表单提交和转化。
+将 Laravel 请求中观测到的获客上下文传递到配置的会话、Blade 和队列事件边界。
 
 </div>
 
@@ -30,7 +30,7 @@
 
 ## 为什么
 
-大多数追踪包只记录页面展示了什么。ClickTrail 证明是哪个广告系列创造了线索或成交。本包是 [clicktrail/php-sdk](https://github.com/vizuh/clicktrail-php) 之上的轻量适配层：SDK 负责 parse/classify/merge/serialize；Laravel 侧负责捕获中间件、经同意校验的会话持久化、队列投递、Blade 输出和 artisan 诊断。
+此包不判断是哪次营销活动导致了线索或成交。它是 [clicktrail/php-sdk](https://github.com/vizuh/clicktrail-php) 之上的轻量适配层：SDK 负责 parse、classify、merge 和 serialize；Laravel 侧负责捕获中间件、经同意校验的会话持久化、队列投递、Blade 输出和 Artisan 诊断。
 
 ## 安装
 
@@ -56,12 +56,12 @@ Route::middleware(['web', 'clicktrail.capture'])->group(function () {
 
 // 2. 访客从 Google Ads 到达；中间件完成触点合并。请求结束后：
 session('clicktrail.attribution');
-// JSON 中 first->source === 'google'、first->clickIds['gclid'] 已写入——
+// JSON 中 first->source === 'google'、first->clickIds['gclid'] 已写入；
 // 仅在同意策略允许 analytics storage 时持久化；未知 = 拒绝。
 
 // 3. 在自己的代码里通过助手函数查看或合并：
 $state = clicktrail()->capture($request);   // 本次请求的 StoredState
-clicktrail()->pendingPayloads();            // [] —— 队列中暂无内容
+clicktrail()->pendingPayloads();            // []；队列中暂无内容
 
 // 4. 转化发生时（表单提交、下单），派发投递任务：
 \ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
@@ -69,7 +69,7 @@ clicktrail()->pendingPayloads();            // [] —— 队列中暂无内容
 // 请求本身期间不发送任何数据。
 ```
 
-之后的直接访问不会改变任何东西——first touch 保持不变，已存储的 last touch 继续保留。这是 SDK 的合并法则：经过测试，而非口头承诺。
+之后的直接访问不会改变任何东西；first touch 保持不变，已存储的 last touch 继续保留。这是 SDK 的合并法则：经过测试，而非口头承诺。
 
 ## Blade 输出
 
@@ -95,7 +95,7 @@ clicktrail()->pendingPayloads();            // [] —— 队列中暂无内容
 
 ```php
 \ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
-// flush() 在遇到 429/5xx/网络错误时抛出 RetryableException——Laravel 按
+// flush() 在遇到 429/5xx/网络错误时抛出 RetryableException；Laravel 按
 // backoff([200ms, 1000ms, 5000ms]) 重跑该任务。PermanentException 则使任务
 // 失败，并把 payload 写入失败事件表。
 ```
@@ -110,7 +110,7 @@ clicktrail()->pendingPayloads();            // [] —— 队列中暂无内容
 foreach (\ClickTrail\Laravel\Models\ClickTrailFailedEvent::get() as $row) {
     clicktrail()->restorePayloads(json_decode($row->payload, true));
 }
-// payload 回到 BatchClient 队列；下一次 DeliverEventsJob 原样发送——
+// payload 回到 BatchClient 队列；下一次 DeliverEventsJob 原样发送；
 // 幂等键相同，不会产生重复。
 ```
 
@@ -143,8 +143,8 @@ php artisan clicktrail:diagnose
 
 | 包 | 功能 | 边界 |
 |---|---|---|
-| **combindma/laravel-trail** | 将 UTM/referrer 存入 Cookie | ClickTrail 证明是哪个广告系列创造了线索或成交：确定性 first/last-touch 合并法则经与 WordPress 和 GTM 引擎共享的金标准夹具验证；持久化受同意门控；批量投递带幂等键 |
-| **DirectoryTree/Metrics** | 统计匿名事件 | 互补关系——ClickTrail 将广告系列与身份和营收关联起来 |
+| **combindma/laravel-trail** | 将 UTM/referrer 存入 Cookie | ClickTrail 增加明确的首次/末次触点规则、由宿主解析的同意门控，以及规范事件的队列投递 |
+| **DirectoryTree/Metrics** | 统计匿名事件 | 用途不同：ClickTrail 传递获客上下文；此包不提供分析面板或营收归因 |
 
 完整分析见 `../docs/COMPETITOR-NOTES.md`。
 
@@ -159,4 +159,4 @@ CI 对所有文件做 lint，并在 PHP 8.1–8.3 上运行两个阶段（`.gith
 
 ## 许可协议
 
-MIT — Copyright (c) 2026 Vizuh OÜ
+MIT; Copyright (c) 2026 Vizuh OÜ

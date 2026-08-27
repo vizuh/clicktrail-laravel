@@ -4,7 +4,8 @@
 
 **clicktrail/laravel**
 
-Sehen Sie, welche Kampagne, welches Keyword, welche Click-ID und Landingpage jede Formular-Übermittlung und Konversion erzeugt hat — in jeder Laravel-10/11-Anwendung.
+Übertragen Sie den in einem Laravel-Request beobachteten Akquisitionskontext an
+konfigurierte Session-, Blade- und Queue-Event-Grenzen.
 
 </div>
 
@@ -30,7 +31,12 @@ Sehen Sie, welche Kampagne, welches Keyword, welche Click-ID und Landingpage jed
 
 ## Warum
 
-Die meisten Tracking-Pakete speichern, was eine Seite angezeigt hat. ClickTrail beweist, welche Kampagne den Lead oder Verkauf erzeugt hat. Dieses Paket ist ein schlanker Adapter über [clicktrail/php-sdk](https://github.com/vizuh/clicktrail-php): Das SDK übernimmt parse/classify/merge/serialize; Laravel übernimmt Capture-Middleware, consent-geprüfte Session-Persistenz, Zustellung über Warteschlangen, Blade-Ausgabe und Artisan-Diagnose.
+Dieses Paket bestimmt nicht, welche Kampagne einen Lead oder Verkauf verursacht
+hat. Es ist ein schlanker Adapter über
+[clicktrail/php-sdk](https://github.com/vizuh/clicktrail-php): Das SDK übernimmt
+Parse, Classify, Merge und Serialize; Laravel übernimmt Capture-Middleware,
+consent-geprüfte Session-Persistenz, Queue-Zustellung, Blade-Ausgabe und
+Artisan-Diagnose.
 
 ## Installation
 
@@ -58,12 +64,12 @@ Route::middleware(['web', 'clicktrail.capture'])->group(function () {
 // 2. Ein Besucher kommt über Google Ads; die Middleware führt den Touch zusammen.
 //    Nach dem Request:
 session('clicktrail.attribution');
-// JSON mit first->source === 'google', gesetztem first->clickIds['gclid'] —
+// JSON mit first->source === 'google', gesetztem first->clickIds['gclid'];
 // gespeichert NUR wenn Consent Analytics-Storage erlaubt; unbekannt = verweigert.
 
 // 3. Über den Helper aus eigenem Code prüfen oder zusammenführen:
 $state = clicktrail()->capture($request);   // StoredState dieses Requests
-clicktrail()->pendingPayloads();            // [] — noch nichts in der Warteschlange
+clicktrail()->pendingPayloads();            // []; noch nichts in der Warteschlange
 
 // 4. Bei der Konversion (Formular-Submit, Bestellung) die Zustellung dispatchen:
 \ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
@@ -71,7 +77,7 @@ clicktrail()->pendingPayloads();            // [] — noch nichts in der Wartesc
 // 200ms/1s/5s; nichts wird während des Requests selbst gesendet.
 ```
 
-Ein direkter Besuch danach ändert nichts — der First Touch bleibt, der gespeicherte Last Touch bleibt erhalten. Das ist das Merge-Gesetz des SDK: getestet, nicht versprochen.
+Ein direkter Besuch danach ändert nichts; der First Touch bleibt, der gespeicherte Last Touch bleibt erhalten. Das ist das Merge-Gesetz des SDK: getestet, nicht versprochen.
 
 ## Blade-Ausgabe
 
@@ -97,7 +103,7 @@ Events werden nie während des Requests gesendet. Dispatchen Sie den Delivery-Jo
 
 ```php
 \ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
-// flush() wirft bei 429/5xx/Netzwerk eine RetryableException — Laravel führt
+// flush() wirft bei 429/5xx/Netzwerk eine RetryableException; Laravel führt
 // den Job per backoff([200ms, 1000ms, 5000ms]) erneut aus. Eine
 // PermanentException lässt den Job fehlschlagen und schreibt die Payloads
 // in die Failed-Events-Tabelle.
@@ -114,7 +120,7 @@ foreach (\ClickTrail\Laravel\Models\ClickTrailFailedEvent::get() as $row) {
     clicktrail()->restorePayloads(json_decode($row->payload, true));
 }
 // Die Payloads sind zurück in der BatchClient-Warteschlange; der nächste
-// DeliverEventsJob-Lauf sendet sie unverändert — gleiche Idempotency-Keys,
+// DeliverEventsJob-Lauf sendet sie unverändert; gleiche Idempotency-Keys,
 // keine Duplikate.
 ```
 
@@ -147,8 +153,8 @@ Verifizieren Sie ClickTrail-Webhook-Callbacks mit HMAC-SHA256-Vergleich in konst
 
 | Paket | Was es tut | Abgrenzung |
 |---|---|---|
-| **combindma/laravel-trail** | Speichert UTMs/Referrers in Cookies | ClickTrail beweist, welche Kampagne den Lead oder Verkauf erzeugt hat: deterministische First-/Last-Touch-Merge-Gesetze, validiert durch Golden Fixtures, die unsere WordPress- und GTM-Engines teilen; consent-geprüfte Persistenz; Batch-Zustellung mit Idempotency-Keys |
-| **DirectoryTree/Metrics** | Zählt anonyme Events | Komplementär — ClickTrail verbindet Kampagnen mit Identitäten und Umsatz |
+| **combindma/laravel-trail** | Speichert UTMs/Referrers in Cookies | ClickTrail ergänzt explizite First-/Last-Touch-Regeln, vom Host aufgelöstes Consent-Gating und Queue-Zustellung kanonischer Events |
+| **DirectoryTree/Metrics** | Zählt anonyme Events | Anderer Zweck: ClickTrail überträgt Akquisitionskontext; dieses Paket bietet weder Analytics-Dashboard noch Umsatzattribution |
 
 Siehe `../docs/COMPETITOR-NOTES.md` für die vollständige Analyse.
 
@@ -163,4 +169,4 @@ Die CI lintet alle Dateien und durchläuft beide Stufen unter PHP 8.1–8.3 (`.g
 
 ## Lizenz
 
-MIT — Copyright (c) 2026 Vizuh OÜ
+MIT; Copyright (c) 2026 Vizuh OÜ
