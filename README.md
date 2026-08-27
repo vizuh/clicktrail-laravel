@@ -66,7 +66,7 @@ $state = clicktrail()->capture($request);   // StoredState for this request
 clicktrail()->pendingPayloads();            // [] means nothing queued yet
 
 // 4. On conversion (form submit, order), queue delivery:
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
 // batched POST to CLICKTRAIL_ENDPOINT with idempotency keys; retries after
 // 200ms/1s/5s; nothing is sent during the request itself.
 ```
@@ -96,7 +96,7 @@ A direct visit afterwards changes nothing: first touch stays, stored last touch 
 Events are never sent during the request. Dispatch the delivery job from your own triggers:
 
 ```php
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
 // flush() throws RetryableException on 429/5xx/network. Laravel re-runs the
 // job via backoff([200ms, 1000ms, 5000ms]). A PermanentException fails the
 // job and routes payloads to the failed-events table.
@@ -112,8 +112,8 @@ After all retries fail, payloads are stored verbatim in the `clicktrail_failed_e
 foreach (\ClickTrail\Laravel\Models\ClickTrailFailedEvent::get() as $row) {
     clicktrail()->restorePayloads(json_decode($row->payload, true));
 }
-// payloads are back in the BatchClient queue; the next DeliverEventsJob run
-// sends them unchanged, same idempotency keys, no duplicates.
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
+// Payloads are sent unchanged, with the same idempotency keys.
 ```
 
 ## Consent

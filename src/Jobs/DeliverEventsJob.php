@@ -21,7 +21,7 @@ final class DeliverEventsJob implements ShouldQueue
     public $tries = 3;
 
     /**
-     * Envelopes drained from the manager client at dispatch time, restored
+     * Envelopes captured from the manager client at dispatch time, restored
      * into the job's client before flush (Metrics-pattern buffered commit).
      *
      * @var array<int, array<string, mixed>>
@@ -31,7 +31,7 @@ final class DeliverEventsJob implements ShouldQueue
     /**
      * @param array<int, array<string, mixed>> $payloads
      */
-    public function __construct(array $payloads = [])
+    public function __construct(array $payloads)
     {
         $this->payloads = $payloads;
 

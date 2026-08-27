@@ -66,7 +66,7 @@ $state = clicktrail()->capture($request);   // StoredState dieses Requests
 clicktrail()->pendingPayloads();            // [] — noch nichts in der Warteschlange
 
 // 4. Bei der Konversion (Formular-Submit, Bestellung) die Zustellung dispatchen:
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
 // POST im Batch an CLICKTRAIL_ENDPOINT mit Idempotency-Keys; Retries nach
 // 200ms/1s/5s; nichts wird während des Requests selbst gesendet.
 ```
@@ -96,7 +96,7 @@ Ein direkter Besuch danach ändert nichts — der First Touch bleibt, der gespei
 Events werden nie während des Requests gesendet. Dispatchen Sie den Delivery-Job aus Ihren eigenen Triggern:
 
 ```php
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
 // flush() wirft bei 429/5xx/Netzwerk eine RetryableException — Laravel führt
 // den Job per backoff([200ms, 1000ms, 5000ms]) erneut aus. Eine
 // PermanentException lässt den Job fehlschlagen und schreibt die Payloads
@@ -113,9 +113,8 @@ Nach erschöpften Retries werden die Payloads unverändert in der Tabelle `click
 foreach (\ClickTrail\Laravel\Models\ClickTrailFailedEvent::get() as $row) {
     clicktrail()->restorePayloads(json_decode($row->payload, true));
 }
-// Die Payloads sind zurück in der BatchClient-Warteschlange; der nächste
-// DeliverEventsJob-Lauf sendet sie unverändert — gleiche Idempotency-Keys,
-// keine Duplikate.
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
+// Die Payloads werden unverändert mit denselben Idempotency-Keys gesendet.
 ```
 
 ## Consent
