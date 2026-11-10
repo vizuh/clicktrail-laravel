@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ClickTrail\Laravel\Jobs;
 
-use ClickTrail\Client\Exception\RetryableException;
+use ClickTrail\Client\Exception\PermanentException;
 use ClickTrail\Laravel\ClickTrailManager;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -50,25 +50,35 @@ final class DeliverEventsJob implements ShouldQueue
     }
 
     /**
-     * Exponential backoff mirroring the SDK transport's retry ladder.
+     * Delay before each job retry. Laravel reads these as SECONDS; they apply
+     * after the SDK's own in-flush retries (~200/400/800 ms) are exhausted.
+     * With $tries = 3 there are two retries.
      *
-     * @return array<int, int> milliseconds
+     * @return array<int, int> seconds
      */
     public function backoff(): array
     {
-        return [200, 1000, 5000];
+        return [10, 60];
     }
 
     public function handle(ClickTrailManager $manager): void
     {
-        if ($this->payloads !== []) {
-            $manager->restorePayloads($this->payloads);
-        }
         // flush() throws RetryableException on 429/5xx/network after the SDK's
         // internal retries; Laravel re-runs this job via backoff(). A
-        // PermanentException (other 4xx / config error) fails the job and
-        // routes payloads to the failed-events table below.
-        $manager->client()->flush();
+        // PermanentException (other 4xx / config error) fails the job without
+        // retry and routes payloads to the failed-events table below.
+        try {
+            // Fresh client per run: never the process-wide cached queue, so a
+            // long-lived worker cannot resend another job's events.
+            $client = $manager->buildClient();
+            $client->restore($this->payloads);
+            $client->flush();
+        } catch (PermanentException $e) {
+            if ($this->job === null) {
+                throw $e; // no queue context (dispatchNow / direct call): fail() would be a no-op
+            }
+            $this->fail($e);
+        }
     }
 
     /**

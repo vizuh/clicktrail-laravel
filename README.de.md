@@ -66,9 +66,10 @@ $state = clicktrail()->capture($request);   // StoredState dieses Requests
 clicktrail()->pendingPayloads();            // [] — noch nichts in der Warteschlange
 
 // 4. Bei der Konversion (Formular-Submit, Bestellung) die Zustellung dispatchen:
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
-// POST im Batch an CLICKTRAIL_ENDPOINT mit Idempotency-Keys; Retries nach
-// 200ms/1s/5s; nichts wird während des Requests selbst gesendet.
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->takePendingPayloads());
+// POST im Batch an CLICKTRAIL_ENDPOINT mit Idempotency-Keys; Job-Retries nach
+// 10s/60s; nichts wird während des Requests selbst gesendet. takePendingPayloads()
+// leert die Manager-Warteschlange, der nächste Dispatch sendet diese nicht erneut.
 ```
 
 Ein direkter Besuch danach ändert nichts — der First Touch bleibt, der gespeicherte Last Touch bleibt erhalten. Das ist das Merge-Gesetz des SDK: getestet, nicht versprochen.
@@ -96,12 +97,15 @@ Ein direkter Besuch danach ändert nichts — der First Touch bleibt, der gespei
 Events werden nie während des Requests gesendet. Dispatchen Sie den Delivery-Job aus Ihren eigenen Triggern:
 
 ```php
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->takePendingPayloads());
 // flush() wirft bei 429/5xx/Netzwerk eine RetryableException — Laravel führt
-// den Job per backoff([200ms, 1000ms, 5000ms]) erneut aus. Eine
-// PermanentException lässt den Job fehlschlagen und schreibt die Payloads
+// den Job per backoff([10, 60]) erneut aus (Sekunden, nach den SDK-internen
+// Retries). Eine PermanentException (sonstige 4xx, fehlende site_id/endpoint)
+// lässt den Job sofort ohne Retry fehlschlagen und schreibt die Payloads
 // in die Failed-Events-Tabelle.
 ```
+
+Jeder Job-Lauf liefert über einen frischen `BatchClient` aus seinen eigenen Payloads aus, daher sendet ein langlebiger Worker nie die Events eines anderen Jobs erneut.
 
 Der Job nutzt den `BatchClient`; binden Sie daher vor dem Dispatch einen PSR-18-Client als `Psr\Http\Client\ClientInterface` plus PSR-17-Request-/Stream-Factories. Queue-Connection und Queue-Name stammen aus `clicktrail.queue_connection` / `clicktrail.queue`.
 
@@ -113,7 +117,7 @@ Nach erschöpften Retries werden die Payloads unverändert in der Tabelle `click
 foreach (\ClickTrail\Laravel\Models\ClickTrailFailedEvent::get() as $row) {
     clicktrail()->restorePayloads(json_decode($row->payload, true));
 }
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->takePendingPayloads());
 // Die Payloads werden unverändert mit denselben Idempotency-Keys gesendet.
 ```
 

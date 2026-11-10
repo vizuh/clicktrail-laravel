@@ -64,9 +64,10 @@ $state = clicktrail()->capture($request);   // 本次请求的 StoredState
 clicktrail()->pendingPayloads();            // [] —— 队列中暂无内容
 
 // 4. 转化发生时（表单提交、下单），派发投递任务：
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
-// 以批次 POST 到 CLICKTRAIL_ENDPOINT，带幂等键；200ms/1s/5s 后重试；
-// 请求本身期间不发送任何数据。
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->takePendingPayloads());
+// 以批次 POST 到 CLICKTRAIL_ENDPOINT，带幂等键；任务在 10s/60s 后重试；
+// 请求本身期间不发送任何数据。takePendingPayloads() 会清空 manager 队列，
+// 下一次派发不会重复发送这些事件。
 ```
 
 之后的直接访问不会改变任何东西——first touch 保持不变，已存储的 last touch 继续保留。这是 SDK 的合并法则：经过测试，而非口头承诺。
@@ -94,11 +95,14 @@ clicktrail()->pendingPayloads();            // [] —— 队列中暂无内容
 事件从不在请求期间发送。在你自己的触发点派发投递任务：
 
 ```php
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->takePendingPayloads());
 // flush() 在遇到 429/5xx/网络错误时抛出 RetryableException——Laravel 按
-// backoff([200ms, 1000ms, 5000ms]) 重跑该任务。PermanentException 则使任务
-// 失败，并把 payload 写入失败事件表。
+// backoff([10, 60]) 重跑该任务（单位为秒，在 SDK 内部重试之后）。
+// PermanentException（其他 4xx、缺少 site_id/endpoint）会立即使任务失败、
+// 不再重试，并把 payload 写入失败事件表。
 ```
+
+每次任务执行都用由其自身 payload 构建的全新 `BatchClient` 投递，因此长时间运行的 worker 不会重复发送其他任务的事件。
 
 该任务基于 `BatchClient` 运行，因此派发前需将 PSR-18 客户端绑定到 `Psr\Http\Client\ClientInterface`，并绑定 PSR-17 的 request/stream 工厂。队列连接与队列名来自 `clicktrail.queue_connection` / `clicktrail.queue`。
 
@@ -110,7 +114,7 @@ clicktrail()->pendingPayloads();            // [] —— 队列中暂无内容
 foreach (\ClickTrail\Laravel\Models\ClickTrailFailedEvent::get() as $row) {
     clicktrail()->restorePayloads(json_decode($row->payload, true));
 }
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->takePendingPayloads());
 // payload 会使用相同的幂等键原样发送。
 ```
 
