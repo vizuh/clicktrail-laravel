@@ -64,7 +64,7 @@ $state = clicktrail()->capture($request);   // 本次请求的 StoredState
 clicktrail()->pendingPayloads();            // [] —— 队列中暂无内容
 
 // 4. 转化发生时（表单提交、下单），派发投递任务：
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
 // 以批次 POST 到 CLICKTRAIL_ENDPOINT，带幂等键；200ms/1s/5s 后重试；
 // 请求本身期间不发送任何数据。
 ```
@@ -94,7 +94,7 @@ clicktrail()->pendingPayloads();            // [] —— 队列中暂无内容
 事件从不在请求期间发送。在你自己的触发点派发投递任务：
 
 ```php
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch();
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
 // flush() 在遇到 429/5xx/网络错误时抛出 RetryableException——Laravel 按
 // backoff([200ms, 1000ms, 5000ms]) 重跑该任务。PermanentException 则使任务
 // 失败，并把 payload 写入失败事件表。
@@ -110,8 +110,8 @@ clicktrail()->pendingPayloads();            // [] —— 队列中暂无内容
 foreach (\ClickTrail\Laravel\Models\ClickTrailFailedEvent::get() as $row) {
     clicktrail()->restorePayloads(json_decode($row->payload, true));
 }
-// payload 回到 BatchClient 队列；下一次 DeliverEventsJob 原样发送——
-// 幂等键相同，不会产生重复。
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
+// payload 会使用相同的幂等键原样发送。
 ```
 
 ## 同意管理

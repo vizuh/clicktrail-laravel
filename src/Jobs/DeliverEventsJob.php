@@ -8,12 +8,14 @@ use ClickTrail\Client\Exception\RetryableException;
 use ClickTrail\Laravel\ClickTrailManager;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
 final class DeliverEventsJob implements ShouldQueue
 {
+    use Dispatchable;
     use Queueable;
     use InteractsWithQueue;
 
@@ -21,7 +23,7 @@ final class DeliverEventsJob implements ShouldQueue
     public $tries = 3;
 
     /**
-     * Envelopes drained from the manager client at dispatch time, restored
+     * Envelopes captured from the manager client at dispatch time, restored
      * into the job's client before flush (Metrics-pattern buffered commit).
      *
      * @var array<int, array<string, mixed>>
@@ -31,7 +33,7 @@ final class DeliverEventsJob implements ShouldQueue
     /**
      * @param array<int, array<string, mixed>> $payloads
      */
-    public function __construct(array $payloads = [])
+    public function __construct(array $payloads)
     {
         $this->payloads = $payloads;
 

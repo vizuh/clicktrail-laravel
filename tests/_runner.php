@@ -8,6 +8,63 @@
  *     -v "$PWD/../clicktrail-php":/sdk:ro wordpress:php8.3-apache php /app/tests/_runner.php
  */
 
+namespace Illuminate\Bus {
+    trait Queueable
+    {
+        public function onConnection(string $connection): static
+        {
+            return $this;
+        }
+
+        public function onQueue(string $queue): static
+        {
+            return $this;
+        }
+    }
+}
+
+// Mirrors laravel/framework: static dispatch() builds the job from its
+// arguments and wraps it in a PendingDispatch (queued when it destructs).
+namespace Illuminate\Foundation\Bus {
+    trait Dispatchable
+    {
+        public static function dispatch(...$arguments): PendingDispatch
+        {
+            return new PendingDispatch(new static(...$arguments));
+        }
+    }
+
+    class PendingDispatch
+    {
+        public function __construct(protected object $job)
+        {
+        }
+
+        public function getJob(): object
+        {
+            return $this->job;
+        }
+    }
+}
+
+namespace Illuminate\Contracts\Queue {
+    interface ShouldQueue
+    {
+    }
+}
+
+namespace Illuminate\Queue {
+    trait InteractsWithQueue
+    {
+    }
+}
+
+namespace Illuminate\Support\Facades {
+    class DB
+    {
+    }
+}
+
 namespace {
     error_reporting(E_ALL);
 
@@ -18,6 +75,17 @@ namespace {
          * @return mixed
          */
         function env(string $key, $default = null)
+        {
+            return $default;
+        }
+    }
+
+    if (!function_exists('config')) {
+        /**
+         * @param mixed $default
+         * @return mixed
+         */
+        function config(string $key, $default = null)
         {
             return $default;
         }
@@ -151,5 +219,40 @@ namespace {
     check(str_contains($attrs, 'data-ct-consent-ad-user-data="denied"'), 'T6 ad_user_data attr rendered');
     check(!str_contains($attrs, 'ad-personalization'), 'T6 missing signal skipped');
 
-    fwrite(STDOUT, "ALL PASS ({$checks} scenarios, 6 groups)\n");
+    // ---- T7: queued-delivery process boundary -----------------------------------
+    $missingPayloadsRejected = false;
+    try {
+        new \ClickTrail\Laravel\Jobs\DeliverEventsJob();
+    } catch (\ArgumentCountError) {
+        $missingPayloadsRejected = true;
+    }
+
+    $inc();
+    check($missingPayloadsRejected, 'T7 delivery job requires serialized payloads');
+
+    // Documented entrypoint (README + FirstPartyProxyController): DeliverEventsJob::dispatch($payloads).
+    $dispatchPayloads = [['event_id' => 'evt_dispatch_1', 'idempotency_key' => 'evt_dispatch_1']];
+    $pending = null;
+    try {
+        $pending = \ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch($dispatchPayloads);
+    } catch (\Error $e) {
+        fwrite(STDERR, 'T7 dispatch error: ' . $e->getMessage() . "\n");
+    }
+    $inc();
+    check($pending instanceof \Illuminate\Foundation\Bus\PendingDispatch, 'T7 DeliverEventsJob::dispatch() returns a pending dispatch');
+    $pendingJob = $pending->getJob();
+    check($pendingJob instanceof \ClickTrail\Laravel\Jobs\DeliverEventsJob && $pendingJob->payloads === $dispatchPayloads, 'T7 dispatch() builds the job from the given payloads');
+
+    $payloads = [[
+        'event_id' => 'evt_order_42',
+        'idempotency_key' => 'evt_order_42',
+        'event' => ['name' => 'conversion'],
+    ]];
+    $job = new \ClickTrail\Laravel\Jobs\DeliverEventsJob($payloads);
+    $workerJob = unserialize(serialize($job));
+
+    check($workerJob instanceof \ClickTrail\Laravel\Jobs\DeliverEventsJob, 'T7 delivery job survives serialization');
+    check($workerJob->payloads === $payloads, 'T7 payloads and idempotency keys cross the worker boundary unchanged');
+
+    fwrite(STDOUT, "ALL PASS ({$checks} scenarios, 7 groups)\n");
 }
