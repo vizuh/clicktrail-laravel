@@ -8,12 +8,14 @@ use ClickTrail\Client\Exception\RetryableException;
 use ClickTrail\Laravel\ClickTrailManager;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
 final class DeliverEventsJob implements ShouldQueue
 {
+    use Dispatchable;
     use Queueable;
     use InteractsWithQueue;
 
