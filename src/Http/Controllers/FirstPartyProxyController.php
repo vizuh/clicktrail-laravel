@@ -42,7 +42,7 @@ final class FirstPartyProxyController
             $client->restore([$event]);
         }
 
-        DeliverEventsJob::dispatch($manager->pendingPayloads());
+        DeliverEventsJob::dispatch($manager->takePendingPayloads());
 
         return new JsonResponse(['queued' => true], 202);
 

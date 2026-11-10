@@ -66,9 +66,10 @@ $state = clicktrail()->capture($request);   // StoredState for this request
 clicktrail()->pendingPayloads();            // [] means nothing queued yet
 
 // 4. On conversion (form submit, order), queue delivery:
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
-// batched POST to CLICKTRAIL_ENDPOINT with idempotency keys; retries after
-// 200ms/1s/5s; nothing is sent during the request itself.
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->takePendingPayloads());
+// batched POST to CLICKTRAIL_ENDPOINT with idempotency keys; job retries after
+// 10s/60s; nothing is sent during the request itself. takePendingPayloads()
+// empties the manager queue, so the next dispatch does not resend these.
 ```
 
 A direct visit afterwards changes nothing: first touch stays, stored last touch persists. That is the SDK's merge law, tested, not promised.
@@ -96,11 +97,14 @@ A direct visit afterwards changes nothing: first touch stays, stored last touch 
 Events are never sent during the request. Dispatch the delivery job from your own triggers:
 
 ```php
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->takePendingPayloads());
 // flush() throws RetryableException on 429/5xx/network. Laravel re-runs the
-// job via backoff([200ms, 1000ms, 5000ms]). A PermanentException fails the
-// job and routes payloads to the failed-events table.
+// job via backoff([10, 60]) (seconds, after the SDK's own in-flush retries).
+// A PermanentException (other 4xx, missing site_id/endpoint) fails the job
+// at once, with no retry, and routes payloads to the failed-events table.
 ```
+
+Each job run delivers through a fresh `BatchClient` built from its own payloads, so a long-lived worker never resends another job's events.
 
 The job uses the `BatchClient`, so bind a PSR-18 client as `Psr\Http\Client\ClientInterface` plus PSR-17 request/stream factories before dispatching. Queue connection and queue name come from `clicktrail.queue_connection` / `clicktrail.queue`.
 
@@ -112,7 +116,7 @@ After all retries fail, payloads are stored verbatim in the `clicktrail_failed_e
 foreach (\ClickTrail\Laravel\Models\ClickTrailFailedEvent::get() as $row) {
     clicktrail()->restorePayloads(json_decode($row->payload, true));
 }
-\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->pendingPayloads());
+\ClickTrail\Laravel\Jobs\DeliverEventsJob::dispatch(clicktrail()->takePendingPayloads());
 // Payloads are sent unchanged, with the same idempotency keys.
 ```
 

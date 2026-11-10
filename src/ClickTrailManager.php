@@ -86,13 +86,28 @@ final class ClickTrailManager
         return $this->client()->pending();
     }
 
+    /**
+     * Hand the queued payloads to a delivery job and drop the cached client,
+     * so a later dispatch in the same process does not resend them.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function takePendingPayloads(): array
+    {
+        $payloads = $this->client?->pending() ?? [];
+        $this->client = null;
+
+        return $payloads;
+    }
+
     /** @param array<int, array<string, mixed>> $payloads */
     public function restorePayloads(array $payloads): void
     {
         $this->client()->restore($payloads);
     }
 
-    private function buildClient(): BatchClient
+    /** New, empty BatchClient wired from config (DeliverEventsJob builds one per run). */
+    public function buildClient(): BatchClient
     {
         foreach ([Psr18ClientInterface::class, RequestFactoryInterface::class, StreamFactoryInterface::class] as $abstract) {
             if (! $this->app->bound($abstract)) {

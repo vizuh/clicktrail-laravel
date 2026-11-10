@@ -32,12 +32,71 @@ namespace Illuminate\Contracts\Queue {
 namespace Illuminate\Queue {
     trait InteractsWithQueue
     {
+        /** @var object|null queue job wrapper; null outside a worker, like Laravel */
+        public $job;
+
+        public function fail($exception = null): void
+        {
+            if ($this->job) {
+                $this->job->fail($exception);
+            }
+        }
     }
 }
 
 namespace Illuminate\Support\Facades {
     class DB
     {
+    }
+}
+
+namespace Illuminate\Container {
+    class Container
+    {
+        /** @param array<string, object> $bindings */
+        public function __construct(private array $bindings = [])
+        {
+        }
+
+        public function bound(string $abstract): bool
+        {
+            return isset($this->bindings[$abstract]);
+        }
+
+        public function make(string $abstract): object
+        {
+            return $this->bindings[$abstract];
+        }
+    }
+}
+
+// Minimal PSR stubs: BatchClient only type-hints these and calls methods dynamically.
+namespace Psr\Http\Client {
+    interface ClientInterface
+    {
+    }
+}
+
+namespace Psr\Http\Message {
+    interface RequestFactoryInterface
+    {
+    }
+
+    interface StreamFactoryInterface
+    {
+    }
+}
+
+namespace Psr\Log {
+    interface LoggerInterface
+    {
+    }
+
+    class NullLogger implements LoggerInterface
+    {
+        public function __call(string $name, array $args): void
+        {
+        }
     }
 }
 
@@ -63,7 +122,7 @@ namespace {
          */
         function config(string $key, $default = null)
         {
-            return $default;
+            return $GLOBALS['clicktrail_test_config'][$key] ?? $default;
         }
     }
 
@@ -217,5 +276,125 @@ namespace {
     check($workerJob instanceof \ClickTrail\Laravel\Jobs\DeliverEventsJob, 'T7 delivery job survives serialization');
     check($workerJob->payloads === $payloads, 'T7 payloads and idempotency keys cross the worker boundary unchanged');
 
-    fwrite(STDOUT, "ALL PASS ({$checks} scenarios, 7 groups)\n");
+    // ---- T8: one worker process, many delivery jobs -----------------------------
+    $GLOBALS['clicktrail_test_config'] = ['clicktrail.site_id' => 's1', 'clicktrail.endpoint' => 'https://ingest.example.test/batch'];
+    // Fake PSR-18 transport: records every event id it receives; answers with queued statuses (default 200).
+    $http = new class implements \Psr\Http\Client\ClientInterface {
+        /** @var array<int, string> */
+        public array $sent = [];
+        /** @var array<int, int> */
+        public array $statuses = [];
+
+        public function sendRequest(object $request): object
+        {
+            foreach (json_decode($request->body, true) as $envelope) {
+                $this->sent[] = $envelope['event_id'];
+            }
+            $status = array_shift($this->statuses) ?? 200;
+
+            return new class ($status) {
+                public function __construct(private int $status)
+                {
+                }
+
+                public function getStatusCode(): int
+                {
+                    return $this->status;
+                }
+            };
+        }
+    };
+    $factory = new class implements \Psr\Http\Message\RequestFactoryInterface, \Psr\Http\Message\StreamFactoryInterface {
+        public function createRequest(string $method, string $uri): object
+        {
+            return new class {
+                public string $body = '';
+
+                public function withHeader(string $name, string $value): static
+                {
+                    return $this;
+                }
+
+                public function withBody(string $body): static
+                {
+                    $this->body = $body;
+
+                    return $this;
+                }
+            };
+        }
+
+        public function createStream(string $content): string
+        {
+            return $content;
+        }
+    };
+    $manager = new \ClickTrail\Laravel\ClickTrailManager(new \Illuminate\Container\Container([
+        \Psr\Http\Client\ClientInterface::class => $http,
+        \Psr\Http\Message\RequestFactoryInterface::class => $factory,
+        \Psr\Http\Message\StreamFactoryInterface::class => $factory,
+    ]));
+    $queueJob = new class {
+        public ?\Throwable $failedWith = null;
+
+        public function fail(?\Throwable $e): void
+        {
+            $this->failedWith = $e;
+        }
+    };
+    $evt = static fn (string $id): array => ['event_id' => $id, 'idempotency_key' => $id, 'event' => ['name' => 'conversion']];
+    $J = \ClickTrail\Laravel\Jobs\DeliverEventsJob::class;
+
+    // Same process (sync driver / Octane / worker dispatching follow-ups): job must not resend the cached queue.
+    $manager->client()->restore([$evt('e1')]);
+    $job1 = new $J($manager->takePendingPayloads());
+    $job1->handle($manager);
+    $manager->client()->restore([$evt('e2')]);
+    $job2 = new $J($manager->takePendingPayloads());
+    $job2->handle($manager);
+    $inc();
+    check($job2->payloads === [$evt('e2')], 'T8 second dispatch carries only events queued after the first');
+    check($http->sent === ['e1', 'e2'], 'T8 two jobs in one process send each event exactly once');
+    check($manager->pendingPayloads() === [], 'T8 manager queue is empty after handoff');
+
+    // A failed job's leftovers never leak into the next job on the same worker.
+    $http->sent = [];
+    $http->statuses = [400];
+    $big = array_map(static fn (int $i): array => $evt("big{$i}"), range(1, 21)); // > batchSize (20)
+    $jobA = new $J($big);
+    $jobA->job = $queueJob;
+    $jobA->handle($manager);
+    $jobB = new $J([$evt('b1')]);
+    $jobB->handle($manager);
+    $inc();
+    check($queueJob->failedWith instanceof \ClickTrail\Client\Exception\PermanentException, 'T8 permanent failure fails the job (no retry)');
+    check(!in_array('big21', $http->sent, true), 'T8 failed job leftovers are not sent by the next job');
+    check(array_slice($http->sent, -1) === ['b1'], 'T8 next job sends only its own payloads');
+
+    // Config error (empty site_id) is permanent too.
+    $GLOBALS['clicktrail_test_config']['clicktrail.site_id'] = '';
+    $queueJob->failedWith = null;
+    $jobC = new $J([$evt('c1')]);
+    $jobC->job = $queueJob;
+    $jobC->handle($manager);
+    $inc();
+    check($queueJob->failedWith instanceof \ClickTrail\Client\Exception\PermanentException, 'T8 config error fails the job (no retry)');
+    $GLOBALS['clicktrail_test_config']['clicktrail.site_id'] = 's1';
+
+    // Retryable failure still propagates so Laravel re-runs the job via backoff().
+    $http->statuses = [503, 503, 503, 503]; // first send + 3 SDK retries (~1.4s of SDK usleep)
+    $queueJob->failedWith = null;
+    $jobD = new $J([$evt('d1')]);
+    $jobD->job = $queueJob;
+    $retried = false;
+    try {
+        $jobD->handle($manager);
+    } catch (\ClickTrail\Client\Exception\RetryableException) {
+        $retried = true;
+    }
+    $inc();
+    check($retried && $queueJob->failedWith === null, 'T8 retryable failure is rethrown, not failed');
+    check($jobD->backoff() === [10, 60], 'T8 backoff is whole seconds (Laravel unit)');
+
+    fwrite(STDOUT, "ALL PASS ({$checks} scenarios, 8 groups)\n");
 }
