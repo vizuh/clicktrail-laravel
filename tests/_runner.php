@@ -381,6 +381,17 @@ namespace {
     check($queueJob->failedWith instanceof \ClickTrail\Client\Exception\PermanentException, 'T8 config error fails the job (no retry)');
     $GLOBALS['clicktrail_test_config']['clicktrail.site_id'] = 's1';
 
+    // Outside a queue worker (dispatchNow / direct handle()) fail() is a no-op, so the error must surface.
+    $http->statuses = [400];
+    $surfaced = false;
+    try {
+        (new $J([$evt('n1')]))->handle($manager);
+    } catch (\ClickTrail\Client\Exception\PermanentException) {
+        $surfaced = true;
+    }
+    $inc();
+    check($surfaced, 'T8 permanent failure without queue context is rethrown, not swallowed');
+
     // Retryable failure still propagates so Laravel re-runs the job via backoff().
     $http->statuses = [503, 503, 503, 503]; // first send + 3 SDK retries (~1.4s of SDK usleep)
     $queueJob->failedWith = null;

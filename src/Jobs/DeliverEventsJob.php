@@ -72,6 +72,9 @@ final class DeliverEventsJob implements ShouldQueue
             $client->restore($this->payloads);
             $client->flush();
         } catch (PermanentException $e) {
+            if ($this->job === null) {
+                throw $e; // no queue context (dispatchNow / direct call): fail() would be a no-op
+            }
             $this->fail($e);
         }
     }
